@@ -46,7 +46,7 @@ namespace Utils
 
 		public static IObservable<Unit> OnTriggerUpAsObservable(KeyCode? editorKey = null)
 		{
-			var controller = Observable.FromEvent<Action<byte, float>, Unit>(
+			var controller = Observable.FromEvent<MLInput.TriggerDelegate, Unit>(
 				f => (_, __) => f(Unit.Default),
 				h => MLInput.OnTriggerUp += h,
 				h => MLInput.OnTriggerUp -= h);
@@ -66,7 +66,7 @@ namespace Utils
 
 		public static IObservable<Unit> OnButtonUpAsObservable(MLInputControllerButton button, KeyCode? editorKey = null)
 		{
-			var buttons = Observable.FromEvent<Action<byte, MLInputControllerButton>, MLInputControllerButton>(
+			var buttons = Observable.FromEvent<MLInput.ControllerButtonDelegate, MLInputControllerButton>(
 				f => (_, b) => f(b),
 				h => MLInput.OnControllerButtonUp += h,
 				h => MLInput.OnControllerButtonUp -= h);
@@ -87,7 +87,7 @@ namespace Utils
 
 		public static IObservable<MLInputControllerTouchpadGesture> OnTouchpadGestureEnded()
 		{
-			return Observable.FromEvent<Action<byte, MLInputControllerTouchpadGesture>, MLInputControllerTouchpadGesture>(
+			return Observable.FromEvent<MLInput.ControllerTouchpadGestureDelegate, MLInputControllerTouchpadGesture>(
 				f => (_, path) => f(path),
 				h => MLInput.OnControllerTouchpadGestureEnd += h,
 				h => MLInput.OnControllerTouchpadGestureEnd -= h);
@@ -128,7 +128,8 @@ namespace Utils
 
 		public static IObservable<byte> OnControllerConnected(bool includeAlreadyConnected = true)
 		{
-			var connecting = Observable.FromEvent<byte>(
+			var connecting = Observable.FromEvent<MLInput.ControllerConnectionDelegate, byte>(
+				f => b => f(b),
 				h => MLInput.OnControllerConnected += h,
 				h => MLInput.OnControllerConnected -= h);
 
@@ -152,7 +153,8 @@ namespace Utils
 
 		public static IObservable<byte> OnControllerDisconnected()
 		{
-			return Observable.FromEvent<byte>(
+			return Observable.FromEvent<MLInput.ControllerConnectionDelegate, byte>(
+				f => b => f(b),
 				h => MLInput.OnControllerDisconnected += h,
 				h => MLInput.OnControllerDisconnected -= h);
 		}
