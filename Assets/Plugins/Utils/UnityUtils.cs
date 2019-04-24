@@ -1,16 +1,17 @@
 using System;
 using UniRx.Async;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Utils
 {
 	public static class UnityUtils
 	{
-		public static async UniTask Animate(float durationSecs, AnimationCurve curve, Action<float> onTick)
+		public static async UniTask Animate(Object obj, float durationSecs, AnimationCurve curve, Action<float> onTick)
 		{
 			float startTime = Time.time;
 			float time = 0;
-			while (time < 1f)
+			while (time < 1f && (obj is null || obj != null))
 			{
 				time = (Time.time - startTime) / durationSecs;
 				float t = Mathf.Clamp01(time);

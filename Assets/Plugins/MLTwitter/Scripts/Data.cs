@@ -6,6 +6,13 @@ using Newtonsoft.Json;
 
 namespace MLTwitter
 {
+	public enum TWSearchResultType
+	{
+		Mixed,
+		Recent,
+		Popular,
+	}
+
 	[Serializable]
 	internal class TWBearerToken
 	{
@@ -114,8 +121,21 @@ namespace MLTwitter
 	}
 
 	[Serializable]
+	public class TWStatuses
+	{
+		[JsonProperty("statuses")]
+		public TWStatus[] Statuses { get; private set; }
+	}
+
+	[Serializable]
 	public class TWStatus
 	{
+		[JsonProperty("id")]
+		public long Id { get; private set; }
+
+		[JsonProperty("user")]
+		public TWUser User { get; private set; }
+
 		[JsonProperty("text")]
 		public string Text { get; private set; }
 
@@ -136,8 +156,8 @@ namespace MLTwitter
 	[Serializable]
 	public class TWMediaObject
 	{
-		[JsonProperty("display_url")]
-		public string Url { get; private set; }
+		[JsonProperty("media_url_https")]
+		public string MediaUrl { get; private set; }
 
 		[JsonProperty("type")]
 		public string Type { get; private set; }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UniRx;
 using UniRx.Async;
 using UnityEngine;
@@ -9,6 +10,16 @@ namespace Utils
 {
 	public static class MLUtils
 	{
+		public static void ThrowIfFail(this MLResult result)
+		{
+			if (result.IsOk || result.Code == MLResultCode.PrivilegeGranted)
+			{
+				return;
+			}
+
+			throw new Exception($"IsOK: {result.IsOk}, Code: {result.Code}");
+		}
+
 		public static async UniTask RequestPrivilege(MLPrivilegeId privilege)
 		{
 			// Don't do privilege if app is running in neither ML device nor ZI mode
@@ -17,7 +28,10 @@ namespace Utils
 				return;
 			}
 
-			MLPrivileges.Start().ThrowIfFail();
+			if (!MLPrivileges.IsStarted)
+			{
+				MLPrivileges.Start().ThrowIfFail();
+			}
 
 			MLResult? result = null;
 			MLPrivileges.RequestPrivilegeAsync(privilege, (r, _) =>
@@ -30,16 +44,6 @@ namespace Utils
 			result?.ThrowIfFail();
 		}
 
-		public static void ThrowIfFail(this MLResult result)
-		{
-			if (result.IsOk || result.Code == MLResultCode.PrivilegeGranted)
-			{
-				return;
-			}
-
-			throw new Exception($"IsOK: {result.IsOk}, Code: {result.Code}");
-		}
-
 		public static IObservable<Unit> OnTriggerUpAsObservable(KeyCode? editorKey = null)
 		{
 			var controller = Observable.FromEvent<Action<byte, float>, Unit>(
@@ -48,9 +52,8 @@ namespace Utils
 				h => MLInput.OnTriggerUp -= h);
 
 			// Support secondary input on keyboard if app is running in Editor
-			if (Application.isEditor)
+			if (Application.isEditor && editorKey is KeyCode key)
 			{
-				var key = editorKey ?? KeyCode.Space;
 				var keyboard = Observable.EveryUpdate()
 				                         .Where(_ => Input.GetKeyUp(key))
 				                         .AsUnitObservable();
@@ -59,6 +62,35 @@ namespace Utils
 			}
 
 			return controller;
+		}
+
+		public static IObservable<Unit> OnButtonUpAsObservable(MLInputControllerButton button, KeyCode? editorKey = null)
+		{
+			var buttons = Observable.FromEvent<Action<byte, MLInputControllerButton>, MLInputControllerButton>(
+				f => (_, b) => f(b),
+				h => MLInput.OnControllerButtonUp += h,
+				h => MLInput.OnControllerButtonUp -= h);
+
+			var ups = buttons.Where(b => b == button).AsUnitObservable();
+
+			if (Application.isEditor && editorKey is KeyCode key)
+			{
+				var keys = Observable.EveryUpdate()
+				                     .Where(_ => Input.GetKeyUp(key))
+				                     .AsUnitObservable();
+
+				ups = ups.Merge(keys);
+			}
+
+			return ups;
+		}
+
+		public static IObservable<MLInputControllerTouchpadGesture> OnTouchpadGestureEnded()
+		{
+			return Observable.FromEvent<Action<byte, MLInputControllerTouchpadGesture>, MLInputControllerTouchpadGesture>(
+				f => (_, path) => f(path),
+				h => MLInput.OnControllerTouchpadGestureEnd += h,
+				h => MLInput.OnControllerTouchpadGestureEnd -= h);
 		}
 
 		public static IObservable<string> OnCaptureCompletedAsObservable()
@@ -85,6 +117,44 @@ namespace Utils
 			{
 				throw new Exception($"MediaError: {c}: {m}");
 			});
+		}
+
+		public static IObservable<float> OnFrameSizeSetupAsObservable(this MLMediaPlayer self)
+		{
+			return Observable.FromEvent<float>(
+				h => self.OnFrameSizeSetup += h,
+				h => self.OnFrameSizeSetup -= h);
+		}
+
+		public static IObservable<byte> OnControllerConnected(bool includeAlreadyConnected = true)
+		{
+			var connecting = Observable.FromEvent<byte>(
+				h => MLInput.OnControllerConnected += h,
+				h => MLInput.OnControllerConnected -= h);
+
+			if (includeAlreadyConnected)
+			{
+				// Search for already connected controllers
+				List<byte> connected = new List<byte>();
+				for (byte i = 0; i < 2; i++)
+				{
+					if (MLInput.GetController(i) != null)
+					{
+						connected.Add(i);
+					}
+				}
+
+				connecting = connected.ToObservable().Merge(connecting);
+			}
+
+			return connecting;
+		}
+
+		public static IObservable<byte> OnControllerDisconnected()
+		{
+			return Observable.FromEvent<byte>(
+				h => MLInput.OnControllerDisconnected += h,
+				h => MLInput.OnControllerDisconnected -= h);
 		}
 	}
 }

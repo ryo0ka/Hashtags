@@ -8,5 +8,10 @@ namespace Utils
 		{
 			return TimeSpan.FromSeconds(seconds);
 		}
+
+		public static TimeSpan Minutes(this float minutes)
+		{
+			return TimeSpan.FromMinutes(minutes);
+		}
 	}
 }

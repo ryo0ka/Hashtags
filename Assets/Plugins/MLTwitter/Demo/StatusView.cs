@@ -5,6 +5,7 @@ using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.XR.MagicLeap;
 using Utils;
+using Utils.Views;
 
 namespace MLTwitter.Demo
 {
@@ -34,6 +35,8 @@ namespace MLTwitter.Demo
 		[SerializeField]
 		CanvasGroup _group;
 
+		MLVideoView _videoView;
+
 		public async UniTask Show(TWUser user)
 		{
 			// Hide video
@@ -58,13 +61,16 @@ namespace MLTwitter.Demo
 			{
 				// Show video
 				_videoImage.gameObject.SetActive(true);
-				
+
 				await PlayVideo(variant.Url);
 			}
 		}
 
 		async UniTask PlayVideo(string url)
 		{
+			_videoView?.Dispose();
+			_videoView = new MLVideoView(_videoImage, _mediaPlayer);
+
 			_mediaPlayer.VideoSource = url;
 
 			// Start observing OnMediaError before PrepareVideo because 
@@ -103,7 +109,7 @@ namespace MLTwitter.Demo
 				gameObject.SetActive(true);
 			}
 
-			await UnityUtils.Animate(0.5f, AnimationCurve.EaseInOut(0, 0, 1, 1), t =>
+			await UnityUtils.Animate(this, 0.5f, AnimationCurve.EaseInOut(0, 0, 1, 1), t =>
 			{
 				_group.alpha = show ? t : 1 - t;
 			});

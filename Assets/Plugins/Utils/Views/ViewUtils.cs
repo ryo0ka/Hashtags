@@ -16,5 +16,10 @@ namespace Utils.Views
 			image.texture = texture;
 			fitter.aspectRatio = (float) texture.width / texture.height;
 		}
+
+		public static float GetAspectRatio(this RawImage image)
+		{
+			return (float) image.texture.width / image.texture.height;
+		}
 	}
 }

@@ -8,6 +8,8 @@ namespace MLTwitter
 	// Implementations of end-user APIs
 	public static class TWClientExtension
 	{
+		static readonly IDictionary<string, string> EmptyQuery = new Dictionary<string, string>();
+
 		public static async UniTask UpdateStatus(this TWClient client, string text, params string[] mediaIds)
 		{
 			await client.Post<JObject>("statuses/update", new Dictionary<string, string>
@@ -19,7 +21,27 @@ namespace MLTwitter
 
 		public static async UniTask<TWUser> VerifyCredentials(this TWClient client)
 		{
-			return await client.Get<TWUser>("account/verify_credentials", new Dictionary<string, string>());
+			return await client.Get<TWUser>("account/verify_credentials", EmptyQuery);
+		}
+
+		public static async UniTask<TWStatuses> Search(this TWClient client, string query, TWSearchResultType resultType)
+		{
+			return await client.Get<TWStatuses>("search/tweets", new Dictionary<string, string>
+			{
+				{"q", query},
+				{"result_type", SearchResultTypeToKey(resultType)}
+			});
+		}
+
+		static string SearchResultTypeToKey(TWSearchResultType resultType)
+		{
+			switch (resultType)
+			{
+				case TWSearchResultType.Mixed: return "mixed";
+				case TWSearchResultType.Recent: return "recent";
+				case TWSearchResultType.Popular: return "popular";
+				default: throw new ArgumentOutOfRangeException(nameof(resultType), resultType, null);
+			}
 		}
 
 		// Sample implementation of image upload
