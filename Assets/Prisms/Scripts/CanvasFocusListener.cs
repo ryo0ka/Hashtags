@@ -2,7 +2,6 @@ using System;
 using UniRx;
 using UniRx.Triggers;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Prisms
 {
@@ -41,18 +40,8 @@ namespace Prisms
 		static bool IsCameraLookingAtCanvas(Camera camera, Canvas canvas)
 		{
 			Vector2 center = camera.ViewportToScreenPoint(Vector2.one / 2);
-			var graphics = GraphicRegistry.GetGraphicsForCanvas(canvas);
-			for (var i = 0; i < graphics.Count; i++)
-			{
-				var t = graphics[i].rectTransform;
-				//Debug.Log($"name: {t.name}");
-				if (RectTransformUtility.RectangleContainsScreenPoint(t, center, camera))
-				{
-					return true;
-				}
-			}
-
-			return false;
+			RectTransform n = canvas.transform as RectTransform;
+			return RectTransformUtility.RectangleContainsScreenPoint(n, center, camera);
 		}
 	}
 }

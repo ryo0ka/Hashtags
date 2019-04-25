@@ -24,12 +24,13 @@ namespace MLTwitter
 			return await client.Get<TWUser>("account/verify_credentials", EmptyQuery);
 		}
 
-		public static async UniTask<TWStatuses> Search(this TWClient client, string query, TWSearchResultType resultType)
+		public static async UniTask<TWStatuses> Search(this TWClient client, TWSearchParameter parameter)
 		{
 			return await client.Get<TWStatuses>("search/tweets", new Dictionary<string, string>
 			{
-				{"q", query},
-				{"result_type", SearchResultTypeToKey(resultType)}
+				{"q", parameter.Query},
+				{"result_type", SearchResultTypeToKey(parameter.ResultType)},
+				{"count", parameter.Count.ToString()}
 			});
 		}
 

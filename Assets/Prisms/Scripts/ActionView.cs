@@ -18,7 +18,7 @@ namespace Prisms
 		Subject<ActionIntent> _intents;
 		bool _active;
 		int _selectedIndex;
-
+		
 		public IObservable<ActionIntent> OnIntent => _intents;
 
 		public void Initialize()

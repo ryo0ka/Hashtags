@@ -13,6 +13,13 @@ namespace MLTwitter
 		Popular,
 	}
 
+	public struct TWSearchParameter
+	{
+		public string Query { get; set; }
+		public TWSearchResultType ResultType { get; set; }
+		public int Count { get; set; }
+	}
+
 	[Serializable]
 	internal class TWBearerToken
 	{

@@ -7,7 +7,7 @@ using Utils;
 
 namespace Prisms
 {
-	public class Prism : MonoBehaviour
+	public class PrismBehaviour : MonoBehaviour
 	{
 		[SerializeField]
 		ActionView _actionView;
@@ -18,29 +18,40 @@ namespace Prisms
 		Camera _camera;
 		CanvasFocusListener _focuses;
 
-		public bool IsFocused => _focuses?.IsFocused ?? false;
+		protected bool IsFocused => _focuses?.IsFocused ?? false;
+		protected bool IsActionActive { get; private set; }
 
 		protected virtual void Awake()
 		{
 			_camera = Camera.main;
 			_focuses = new CanvasFocusListener(Camera.main, _canvas).AddTo(this);
-			_canvas.worldCamera = _camera;
 			_actionView.Initialize();
+
+			foreach (Canvas canvas in GetComponentsInChildren<Canvas>())
+			{
+				canvas.worldCamera = _camera;
+			}
 		}
 
 		protected virtual void Start()
 		{
-			RunActionView().Forget(Debug.LogException);
+			DoStart().Forget(Debug.LogException);
 		}
 
-		async UniTask RunActionView()
+		async UniTask DoStart()
 		{
+			await RelocatePrism();
+
+			OnSpawned();
+
 			while (this != null)
 			{
 				// Wait for bumper button press
 				await MLUtils.OnButtonUpAsObservable(MLInputControllerButton.Bumper)
 				             .Where(_ => _focuses.IsFocused)
 				             .First();
+
+				IsActionActive = true;
 
 				// Show action view
 				_actionView.SetActive(true).Forget(Debug.LogException);
@@ -61,7 +72,7 @@ namespace Prisms
 						Debug.Log("Cancelled");
 						break;
 					case ActionIntent.Relocate:
-						await ReplacePrism();
+						await RelocatePrism();
 						break;
 					case ActionIntent.Delete:
 						DeletePrism();
@@ -69,16 +80,24 @@ namespace Prisms
 					default:
 						throw new ArgumentOutOfRangeException();
 				}
+
+				IsActionActive = false;
 			}
 		}
 
-		async UniTask ReplacePrism()
+		protected virtual void OnSpawned()
+		{
+			// Override this method to initiate an app on this prism
+			throw new NotImplementedException();
+		}
+
+		async UniTask RelocatePrism()
 		{
 			// Move this prism...
 			using (new PrismLocator(transform, _camera.transform))
 			{
 				// ...unitil trigger is pressed
-				await MLUtils.OnTriggerUpAsObservable()
+				await MLUtils.OnTriggerUpAsObservable(KeyCode.Space)
 				             .TakeUntilDestroy(this)
 				             .FirstOrDefault();
 			}

@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using MLTwitter;
 using UniRx;
 using UniRx.Async;
@@ -42,31 +41,60 @@ namespace Hashtags
 		[SerializeField]
 		AspectRatioFitter _mediaFitter;
 
-		[SerializeField]
-		CanvasGroup _group;
-
 		[SerializeField, Range(0, 1)]
 		float _baseAudioVolume;
 
-		MLVideoView _videoView;
+		[SerializeField]
+		float _duration;
+
+		[SerializeField]
+		AnimationCurve _curve;
+
+		[SerializeField]
+		CanvasGroup _group;
+
 		DateTime _statusUploadTime;
 
-		void Awake()
+		Camera _camera;
+		RectTransform _canvas;
+		RectTransform _transform;
+		LayoutElement _layoutElement;
+		MLVideoView _videoView;
+
+		// We'll render this view iff this view is inside the canvas
+		bool CanBeVisible => ViewUtils.IsRectContained(_camera, _canvas, _transform);
+
+		void Start()
 		{
-			this.UpdateAsObservable().ThrottleFirst(1f.Minutes()).Subscribe(_ =>
-			{
-				// Refresh upload time every minute
-				_dateTimeText.text = DateTimeToString(_statusUploadTime);
-			});
+			_camera = Camera.main;
+			_canvas = GetComponentInParent<Canvas>().transform as RectTransform;
+			_transform = transform as RectTransform;
+			_layoutElement = GetComponent<LayoutElement>();
+
+			SetVisible(true).Forget(Debug.LogException);
+
+			// Refresh upload time every minute
+			this.UpdateAsObservable()
+			    .ThrottleFirst(1f.Minutes())
+			    .Subscribe(_ =>
+			    {
+				    _dateTimeText.text = DateTimeToString(_statusUploadTime);
+			    });
+
+			// Render this view iff it can be visible
+			this.UpdateAsObservable()
+			    .Select(_ => CanBeVisible)
+			    .DistinctUntilChanged()
+			    .Subscribe(canBeVisible =>
+			    {
+				    SetVisible(canBeVisible, true).Forget(Debug.LogException);
+			    });
 		}
 
-		public async UniTask SetStatus(TWStatus status, bool setVisible)
+		public async UniTask SetStatus(TWStatus status)
 		{
 			// Hide video
 			_mediaRoot.SetActive(false);
-
-			// Show the entire view
-			Fade(true).Forget(Debug.LogException);
 
 			_statusUploadTime = status.DateTime;
 
@@ -78,58 +106,60 @@ namespace Hashtags
 			_screenNameText.text = user.ScreenName;
 			_profileImage.texture = await DownloadImage(user.ProfileImageUrl);
 
-			if (TryFindMediaEntity(status, out var media))
+			if (status.TryFindMediaEntity(out var media))
 			{
 				// Show media view
 				_mediaRoot.SetActive(true);
 
 				_videoView?.Dispose();
-				_mediaImage.texture = await DownloadImage(media.MediaUrl);
-				_mediaFitter.aspectRatio = _mediaImage.GetAspectRatio();
+				var thumbnail = await DownloadImage(media.MediaUrl);
+				_mediaImage.SetTexture(thumbnail, _mediaFitter);
 
 				// Show & play video if included in the status
-				if (TryFindVideoUrl(media, out var videoUrl))
+				if (media.TryFindVideoUrl(out var videoUrl))
 				{
 					PlayVideo(videoUrl).Forget(Debug.LogException);
 				}
 			}
+		}
 
-			if (setVisible)
+		async UniTask SetVisible(bool visible, bool preserveLayout = false)
+		{
+			if (visible)
 			{
-				await SetVisible(true);
+				// Replay video (if exists) when a view appears
+				PlayVideoIfExists().Forget(Debug.LogException);
+			}
+
+			await UnityUtils.Animate(this, _duration, _curve, t =>
+			{
+				// Gradually appear/disappear
+				_group.alpha = visible ? t : 1f - t;
+
+				if (visible & !preserveLayout)
+				{
+					// Gradually expand from zero to preferred size
+					_layoutElement.SetPreferredHeightByLerp(t);
+				}
+			});
+
+			// Disable preferred height constraint 
+			// because media can appear after this animation
+			_layoutElement.preferredHeight = -1;
+
+			if (!visible)
+			{
+				// Stop playing video (if exists) when a view disappears
+				_mediaPlayer.Stop();
 			}
 		}
 
-		bool TryFindMediaEntity(TWStatus status, out TWMediaObject mediaFound)
+		async UniTask PlayVideoIfExists()
 		{
-			if (status.ExtendedEntities?.Media is TWMediaObject[] mediaObjs &&
-			    mediaObjs.FirstOrDefault(m => m.Type == "photo" || m.Type == "video") is TWMediaObject media)
+			if (_mediaPlayer.VideoSource != null)
 			{
-				mediaFound = media;
-				return true;
+				await PlayVideo(_mediaPlayer.VideoSource);
 			}
-
-			mediaFound = null;
-			return false;
-		}
-
-		bool TryFindVideoUrl(TWMediaObject media, out string videoUrl)
-		{
-			if (media.Type != "video")
-			{
-				videoUrl = null;
-				return false;
-			}
-
-			var variants = media.VideoInfo.Variants;
-			if (variants.Where(v => v.Url.Contains(".mp4")).TryGetFirstValue(out var variant))
-			{
-				videoUrl = variant.Url;
-				return true;
-			}
-
-			videoUrl = null;
-			return false;
 		}
 
 		async UniTask PlayVideo(string url)
@@ -156,43 +186,6 @@ namespace Hashtags
 			// Play video
 			_mediaPlayer.IsLooping = true;
 			_mediaPlayer.Play().ThrowIfFail();
-
-			_mediaPlayer.SetVolume(0);
-			_mediaPlayer.GetComponent<AudioSource>().volume = 0;
-		}
-
-		public async UniTask SetVisible(bool visible, bool immediately = false, bool preserveLayout = false)
-		{
-			if (immediately && !preserveLayout)
-			{
-				gameObject.SetActive(visible);
-				return;
-			}
-
-			await Fade(visible);
-		}
-
-		async UniTask Fade(bool visible, bool preserveLayout = false)
-		{
-			if (!preserveLayout && visible)
-			{
-				gameObject.SetActive(true);
-			}
-
-			await UnityUtils.Animate(this, 0.5f, AnimationCurve.EaseInOut(0, 0, 1, 1), t =>
-			{
-				_group.alpha = visible ? t : 1 - t;
-			});
-
-			if (!visible)
-			{
-				_mediaPlayer.Stop();
-			}
-
-			if (!preserveLayout && !visible)
-			{
-				gameObject.SetActive(false);
-			}
 		}
 
 		static async UniTask<Texture> DownloadImage(string url)
@@ -207,7 +200,9 @@ namespace Hashtags
 		// Pritty-print uploaded time based on official app
 		static string DateTimeToString(DateTime then)
 		{
-			DateTime now = DateTime.Now;
+			DateTime now = DateTime.UtcNow;
+
+			//Debug.Log($"{then:yyyy MMMM dd HH:mm:ss}, {now:yyyy MMMM dd HH:mm:ss}");
 
 			// Show "now" until a minute
 			double seconds = (now - then).TotalSeconds;

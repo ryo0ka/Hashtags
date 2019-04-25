@@ -126,14 +126,14 @@ namespace Utils
 				h => self.OnFrameSizeSetup -= h);
 		}
 
-		public static IObservable<byte> OnControllerConnected(bool includeAlreadyConnected = true)
+		public static IObservable<byte> OnControllerConnected(bool includeConnected = true)
 		{
 			var connecting = Observable.FromEvent<MLInput.ControllerConnectionDelegate, byte>(
 				f => b => f(b),
 				h => MLInput.OnControllerConnected += h,
 				h => MLInput.OnControllerConnected -= h);
 
-			if (includeAlreadyConnected)
+			if (includeConnected)
 			{
 				// Search for already connected controllers
 				List<byte> connected = new List<byte>();
@@ -149,6 +149,13 @@ namespace Utils
 			}
 
 			return connecting;
+		}
+
+		public static IObservable<MLInputController> OnControllerConnected(MLInputControllerType type, bool includeConnected = true)
+		{
+			return OnControllerConnected(includeConnected)
+			       .Select(id => MLInput.GetController(id))
+			       .Where(c => c.Type == type);
 		}
 
 		public static IObservable<byte> OnControllerDisconnected()

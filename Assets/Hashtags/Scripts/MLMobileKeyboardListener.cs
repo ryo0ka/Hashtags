@@ -4,18 +4,25 @@ using UnityEngine;
 
 namespace Hashtags
 {
-	public class KeyboardInputReceiver : IDisposable
+	// Receive keyboard events from Mobile App keyboard until Disposed.
+	// Works in Unity Editor with PC keyboard, NOT the phone's keyboard.
+	// Ensure BT connection with the device before using this class.
+	// This class doesn't take a responsibility to handle BT connection.
+	public class MLMobileKeyboardListener : IDisposable
 	{
 		readonly Subject<char> _chars = new Subject<char>();
 		readonly Subject<Unit> _backspaces = new Subject<Unit>();
 		readonly Subject<Unit> _returns = new Subject<Unit>();
-		readonly IDisposable _onGUI;
+		readonly IDisposable _onGUIs;
 
-		public KeyboardInputReceiver(IObservable<Unit> onGUI)
+		// Pass OnGUI() events to the stream
+		public MLMobileKeyboardListener(IObservable<Unit> onGUI)
 		{
-			_onGUI = onGUI.Subscribe(_ => OnGUI());
+			_onGUIs = onGUI.Subscribe(_ => OnGUI());
 		}
 
+		// Note that you won't receive any characters
+		// until user hits that "send" button on mobile UI.
 		public IObservable<char> OnCharacter => _chars;
 		public IObservable<Unit> OnBackspace => _backspaces;
 		public IObservable<Unit> OnReturn => _returns;
@@ -54,7 +61,7 @@ namespace Hashtags
 			_chars.Dispose();
 			_backspaces.Dispose();
 			_returns.Dispose();
-			_onGUI.Dispose();
+			_onGUIs.Dispose();
 		}
 	}
 }

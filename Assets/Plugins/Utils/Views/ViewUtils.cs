@@ -17,9 +17,30 @@ namespace Utils.Views
 			fitter.aspectRatio = (float) texture.width / texture.height;
 		}
 
-		public static float GetAspectRatio(this RawImage image)
+		// for IsRectContained()
+		static readonly Vector3[] _corners = new Vector3[4];
+
+		public static bool IsRectContained(
+			Camera camera,
+			RectTransform container,
+			RectTransform content)
 		{
-			return (float) image.texture.width / image.texture.height;
+			content.GetWorldCorners(_corners);
+			Vector2 minPoint = camera.WorldToScreenPoint(_corners[0]);
+			Vector2 maxPoint = camera.WorldToScreenPoint(_corners[2]);
+
+			return RectTransformUtility.RectangleContainsScreenPoint(container, minPoint, camera) ||
+			       RectTransformUtility.RectangleContainsScreenPoint(container, maxPoint, camera);
+		}
+
+		// Gradually expand from zero to preferred height
+		public static void SetPreferredHeightByLerp(this LayoutElement layoutElement, float t)
+		{
+			layoutElement.enabled = false; // for actual preferred height
+			float preferredHight = LayoutUtility.GetPreferredHeight(layoutElement.transform as RectTransform);
+			float targetHeight = Mathf.Lerp(0, preferredHight, t);
+			layoutElement.preferredHeight = targetHeight;
+			layoutElement.enabled = true;
 		}
 	}
 }
