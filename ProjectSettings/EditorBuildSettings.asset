@@ -5,9 +5,6 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/Plugins/MagicLeap/Examples/Scenes/MobileApp.unity
-    guid: ccb836e31dba83841bb2120712b3741a
   - enabled: 1
     path: Assets/Hashtags/Scene/Main.unity
     guid: 235dd323bc5fc478f9e837fac4574735

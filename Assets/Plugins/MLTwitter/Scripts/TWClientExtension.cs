@@ -8,8 +8,6 @@ namespace MLTwitter
 	// Implementations of end-user APIs
 	public static class TWClientExtension
 	{
-		static readonly IDictionary<string, string> EmptyQuery = new Dictionary<string, string>();
-
 		public static async UniTask UpdateStatus(this TWClient client, string text, params string[] mediaIds)
 		{
 			await client.Post<JObject>("statuses/update", new Dictionary<string, string>
@@ -21,16 +19,21 @@ namespace MLTwitter
 
 		public static async UniTask<TWUser> VerifyCredentials(this TWClient client)
 		{
-			return await client.Get<TWUser>("account/verify_credentials", EmptyQuery);
+			return await client.Get<TWUser>("account/verify_credentials", new Dictionary<string, string>
+			{
+				{"tweet_mode", "extended"},
+			});
 		}
 
 		public static async UniTask<TWStatuses> Search(this TWClient client, TWSearchParameter parameter)
 		{
 			return await client.Get<TWStatuses>("search/tweets", new Dictionary<string, string>
 			{
+				{"tweet_mode", "extended"},
 				{"q", parameter.Query},
 				{"result_type", SearchResultTypeToKey(parameter.ResultType)},
-				{"count", parameter.Count.ToString()}
+				{"count", parameter.Count.ToString()},
+				{"since_id", parameter.SinceId.ToString()}
 			});
 		}
 

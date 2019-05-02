@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using MLTwitter;
 using Prisms;
@@ -9,6 +8,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR.MagicLeap;
 using Utils;
+using Utils.MagicLeaps;
+using Utils.Views;
 
 namespace Hashtags
 {
@@ -21,24 +22,27 @@ namespace Hashtags
 		Text _titleText;
 
 		[SerializeField]
-		StatusView _statusViewTemplate;
+		TimelineView _timelineView;
 
 		[SerializeField]
-		Transform _statusViewRoot;
+		Visible _logoView;
 
 		[SerializeField]
-		GameObject _keyboardConnectionView;
+		Visible _keyboardConnectionView;
 
 		[SerializeField]
-		GameObject _controllerConnectionView;
+		Visible _controllerConnectionView;
 
 		[SerializeField]
-		ScrollRect _scroll;
+		Visible _keyboardInstructionView;
 
 		[SerializeField]
-		float _scrollMagnitude;
+		GameObject _scrollView;
 
-		Subject<Unit> _onGUIs;
+		// All tweets present in the timeline
+		HashSet<long> _presentStatuses;
+
+		TWClient _client;
 
 		public string DebugKeyword { private get; set; }
 
@@ -46,106 +50,128 @@ namespace Hashtags
 		{
 			base.Awake();
 
-			_onGUIs = new Subject<Unit>();
+			_presentStatuses = new HashSet<long>();
 
 			// Initialize views
-			_keyboardConnectionView.SetActive(false);
-			_controllerConnectionView.SetActive(false);
+			_keyboardConnectionView.HideUntilStart();
+			_controllerConnectionView.HideUntilStart();
+			_keyboardInstructionView.HideUntilStart();
+			_scrollView.SetActive(false);
 		}
 
-		protected override void OnSpawned()
+		protected override void StartPrismApp()
 		{
 			DoStart().Forget(Debug.LogException);
-		}
-
-		void OnGUI()
-		{
-			// Receive OnGUIs for keyboard input
-			_onGUIs?.OnNext(Unit.Default);
 		}
 
 		async UniTask DoStart()
 		{
 			// Set up Twitter client
-			var client = new TWClient(_credentials, _credentials);
+			_client = new TWClient(_credentials, _credentials);
 			_credentials.LoadStorage();
-			await client.AuthorizeApp();
+			await _client.AuthorizeApp();
 
-			_keyboardConnectionView.SetActive(true);
+			await _keyboardConnectionView.SetVisible(true);
 
-			// Wait until mobile app connection is secured
-			await MLUtils.OnControllerConnected(MLInputControllerType.MobileApp)
-			             .TakeUntilDestroy(this)
-			             .First();
+			if (string.IsNullOrEmpty(DebugKeyword))
+			{
+				// Wait until mobile app connection is secured
+				await MLUtils.OnControllerConnected(MLInputControllerType.MobileApp)
+				             .TakeUntilDestroy(this)
+				             .First();
+			}
 
-			_keyboardConnectionView.SetActive(false);
+			await _keyboardConnectionView.SetVisible(false);
+			await _keyboardInstructionView.SetVisible(true);
 
 			// Receive a search keyword from mobile app (or editor keyboard)
-			string searchKeyword = DebugKeyword ?? await ReadMobileKeyboard();
+			string rawInput = DebugKeyword ?? await ReadKeyboard();
+
+			string searchKeyword = TWUtils.MakeHashtag(rawInput);
 
 			// Show the entered keyword atop timeline
 			_titleText.text = searchKeyword;
 
-			_controllerConnectionView.SetActive(true);
+			await _keyboardInstructionView.SetVisible(false);
 
-			// Wait until controller connection is secured
-			var controller = await MLUtils.OnControllerConnected(MLInputControllerType.Control)
-			                              .TakeUntilDestroy(this)
-			                              .First();
-
-			_controllerConnectionView.SetActive(false);
-
-			// Scroll timeline by swipes on touchpad
-			var swipes = new MLTouchpadSwipeListener(controller).AddTo(this);
-			swipes.OnSwiped.Where(_ => IsFocused && !IsActionActive).Subscribe(delta =>
-			{
-				_scroll.content.anchoredPosition += Vector2.up * delta.y * _scrollMagnitude;
-			});
-
-			// All tweet views present in the timeline
-			var views = new SortedDictionary<long, StatusView>();
+			bool firstTimeUpdatingList = true;
+			long lastLatestId = 0;
 
 			while (this != null)
 			{
-				// Refresh timeline every 10 seconds
-				var refresh = UniTask.Delay(10f.Seconds());
+				var stopwatch = Stopwatch.Start();
 
 				// Fetch latest tweets with the search keyword
-				var tweets = await client.Search(new TWSearchParameter
+				var tweets = await _client.Search(new TWSearchParameter
 				{
 					Query = searchKeyword,
 					ResultType = TWSearchResultType.Mixed,
-					Count = 50,
+					Count = 100,
+					SinceId = lastLatestId,
 				});
 
-				// Insert tweets to timeline
-				foreach (var status in tweets.Statuses.Reverse())
+				if (tweets.Statuses.TryGetFirstValue(out var latest))
 				{
-					// Skip already presented tweets
-					if (views.ContainsKey(status.Id)) continue;
-
-					// Skip tweets that don't contain media
-					if (!status.TryFindMediaEntity(out _)) continue;
-
-					// Instantiate a tweet view and add to the timeline
-					var view = Instantiate(_statusViewTemplate, _statusViewRoot);
-					view.transform.SetSiblingIndex(0);
-					views.Add(status.Id, view);
-
-					// Set data and present on timeline
-					await view.SetStatus(status);
+					lastLatestId = latest.Id;
 				}
 
-				await refresh;
+				if (firstTimeUpdatingList)
+				{
+					firstTimeUpdatingList = false;
+
+					// Hide logo
+					await _logoView.SetVisible(false);
+
+					// Show timeline
+					_scrollView.SetActive(true);
+				}
+
+				await UpdateTimeline(tweets);
+
+				// Refresh timeline every 10 seconds
+				await stopwatch.WaitFor(10f.Seconds());
+
+				Debug.Log("refreshed");
 			}
 		}
 
-		async UniTask<string> ReadMobileKeyboard()
+		async UniTask UpdateTimeline(TWStatuses statuses)
+		{
+			// Start with older tweets
+			for (var i = statuses.Statuses.Length - 1; i >= 0; i--)
+			{
+				var status = statuses.Statuses[i];
+
+				// Use the RT (if exists) so we don't get duplicates
+				status = status.TryFindRetweetedStatus(out var rt) ? rt : status;
+
+				// Skip already present tweets
+				if (_presentStatuses.Contains(status.Id)) continue;
+
+				// Skip tweets that don't contain media
+				if (!status.TryFindMediaEntity(out _)) continue;
+
+				var stopwatch = Stopwatch.Start();
+
+				// Prevent duplicates later
+				_presentStatuses.Add(status.Id);
+
+				// Set data and present on timeline
+				await _timelineView.Append(status);
+
+				// Display one tweet per second
+				await stopwatch.WaitFor(0.5f.Seconds());
+
+				Debug.Log("done interval");
+			}
+		}
+
+		async UniTask<string> ReadKeyboard()
 		{
 			var input = new StringBuilder();
 
 			// Receive keyboard input until Return is pressed
-			using (var keyboard = new MLMobileKeyboardListener(_onGUIs).AddTo(this))
+			using (var keyboard = new MLMobileKeyboardListener(this.OnGUIAsObservable()).AddTo(this))
 			{
 				// Receive characters
 				keyboard.OnCharacter.Subscribe(c =>

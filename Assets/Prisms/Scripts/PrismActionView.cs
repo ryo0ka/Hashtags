@@ -3,14 +3,15 @@ using UniRx;
 using UniRx.Async;
 using UnityEngine;
 using UnityEngine.XR.MagicLeap;
-using Utils;
+using Utils.MagicLeaps;
+using Utils.Views;
 
 namespace Prisms
 {
-	public class ActionView : MonoBehaviour
+	public class PrismActionView : MonoBehaviour
 	{
 		[SerializeField]
-		CanvasGroup _group;
+		Visible _visible;
 
 		[SerializeField]
 		ActionButton[] _buttons;
@@ -18,11 +19,12 @@ namespace Prisms
 		Subject<ActionIntent> _intents;
 		bool _active;
 		int _selectedIndex;
-		
+
 		public IObservable<ActionIntent> OnIntent => _intents;
 
 		public void Initialize()
 		{
+			_active = false;
 			_intents = new Subject<ActionIntent>().AddTo(this);
 
 			// Receive trigger button presses
@@ -32,14 +34,14 @@ namespace Prisms
 			       .AddTo(this);
 
 			// Receive swipe gestures on touchpad
-			MLUtils.OnTouchpadGestureEnded()
+			MLUtils.OnTouchpadGestureEndedAsObservable()
 			       .Where(_ => _active)
 			       .Where(g => g.Type == MLInputControllerTouchpadGestureType.Swipe)
 			       .Subscribe(g => OnTouchpadSwiped(g))
 			       .AddTo(this);
 
 			// Hide this view on start
-			SetActive(false, true).Forget(Debug.LogException);
+			_visible.HideUntilStart();
 
 			// Ensure the first button is selected by default
 			ApplySelectionToButtons();
@@ -58,7 +60,7 @@ namespace Prisms
 			_selectedIndex += SwipeDirectionToIndexDelta(gesture.Direction);
 
 			// Prevent oob exception
-			_selectedIndex = (int) MathUtils.Mod(_selectedIndex, _buttons.Length);
+			_selectedIndex = Mathf.Clamp(_selectedIndex, 0, _buttons.Length);
 
 			// Update views
 			ApplySelectionToButtons();
@@ -68,8 +70,8 @@ namespace Prisms
 		{
 			switch (dir)
 			{
-				case MLInputControllerTouchpadGestureDirection.Up: return -1;
-				case MLInputControllerTouchpadGestureDirection.Down: return 1;
+				case MLInputControllerTouchpadGestureDirection.Left: return -1;
+				case MLInputControllerTouchpadGestureDirection.Right: return 1;
 				default: return 0;
 			}
 		}
@@ -82,35 +84,10 @@ namespace Prisms
 			}
 		}
 
-		public async UniTask SetActive(bool active, bool immediate = false)
+		public async UniTask SetActive(bool active)
 		{
 			_active = active;
-
-			if (immediate)
-			{
-				gameObject.SetActive(active);
-				return;
-			}
-
-			await Fade(active);
-		}
-
-		async UniTask Fade(bool visible)
-		{
-			if (this && visible)
-			{
-				gameObject.SetActive(true);
-			}
-
-			await UnityUtils.Animate(this, 0.5f, AnimationCurve.EaseInOut(0, 0, 1, 1), t =>
-			{
-				_group.alpha = visible ? t : 1 - t;
-			});
-
-			if (this && !visible)
-			{
-				gameObject.SetActive(false);
-			}
+			await _visible.SetVisible(active);
 		}
 	}
 }

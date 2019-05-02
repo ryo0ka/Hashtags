@@ -2,56 +2,94 @@ using System;
 using UniRx;
 using UniRx.Async;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.XR.MagicLeap;
-using Utils;
+using Utils.MagicLeaps;
+using Utils.Views;
 
 namespace Prisms
 {
 	public class PrismBehaviour : MonoBehaviour
 	{
 		[SerializeField]
-		ActionView _actionView;
+		PrismActionView _actionView;
 
 		[SerializeField]
-		Canvas _canvas;
+		RectTransform _canvas;
+
+		[SerializeField]
+		Visible _visible;
+
+		[SerializeField]
+		Selectable _focusIndicator;
+
+		[SerializeField]
+		PrismTransformer _transformer;
 
 		Camera _camera;
-		CanvasFocusListener _focuses;
+		SpatialMeshController _spatialMesh;
 
-		protected bool IsFocused => _focuses?.IsFocused ?? false;
-		protected bool IsActionActive { get; private set; }
+		ReactiveProperty<bool> _actionActive;
+		Subject<Unit> _onPrismInitialized;
+
+		public bool IsFocused { get; private set; }
+		public bool IsActionActive => _actionActive.Value;
+		public IObservable<Unit> PrismInitialized => _onPrismInitialized;
 
 		protected virtual void Awake()
 		{
 			_camera = Camera.main;
-			_focuses = new CanvasFocusListener(Camera.main, _canvas).AddTo(this);
-			_actionView.Initialize();
+			_spatialMesh = FindObjectOfType<SpatialMeshController>();
 
+			_actionActive = new ReactiveProperty<bool>().AddTo(this);
+			_onPrismInitialized = new Subject<Unit>().AddTo(this);
+
+			_actionView.Initialize();
+			_transformer.enabled = false;
+
+			// Set up canvases
 			foreach (Canvas canvas in GetComponentsInChildren<Canvas>())
 			{
 				canvas.worldCamera = _camera;
 			}
+
+			// Make the view look unfocused during action 
+			_actionActive.Subscribe(actionActive =>
+			{
+				_visible.SetFocus(!actionActive).Forget(Debug.LogException);
+			});
 		}
 
-		protected virtual void Start()
+		void Start()
 		{
 			DoStart().Forget(Debug.LogException);
 		}
 
+		void Update()
+		{
+			IsFocused = _camera.IsLookingAt(_canvas);
+
+			// Quick highlight animation
+			_focusIndicator.interactable = IsFocused;
+		}
+
 		async UniTask DoStart()
 		{
-			await RelocatePrism();
+			// Wait until this prism is placed at initial poisition
+			await TransformPrism();
 
-			OnSpawned();
+			// Notify app that it's ready to start
+			StartPrismApp();
+			_onPrismInitialized.OnNext(Unit.Default);
 
 			while (this != null)
 			{
 				// Wait for bumper button press
 				await MLUtils.OnButtonUpAsObservable(MLInputControllerButton.Bumper)
-				             .Where(_ => _focuses.IsFocused)
+				             .Where(_ => IsFocused)
 				             .First();
 
-				IsActionActive = true;
+				_actionActive.Value = true;
 
 				// Show action view
 				_actionView.SetActive(true).Forget(Debug.LogException);
@@ -71,40 +109,47 @@ namespace Prisms
 					case ActionIntent.Cancel:
 						Debug.Log("Cancelled");
 						break;
-					case ActionIntent.Relocate:
-						await RelocatePrism();
+					case ActionIntent.Transform:
+						await TransformPrism();
 						break;
 					case ActionIntent.Delete:
-						DeletePrism();
+						await DeletePrism();
 						return;
 					default:
 						throw new ArgumentOutOfRangeException();
 				}
 
-				IsActionActive = false;
+				_actionActive.Value = false;
 			}
 		}
 
-		protected virtual void OnSpawned()
+		protected virtual void StartPrismApp()
 		{
-			// Override this method to initiate an app on this prism
-			throw new NotImplementedException();
+			Debug.LogWarning("You should be overriding this method");
 		}
 
-		async UniTask RelocatePrism()
+		async UniTask TransformPrism()
 		{
-			// Move this prism...
-			using (new PrismLocator(transform, _camera.transform))
-			{
-				// ...unitil trigger is pressed
-				await MLUtils.OnTriggerUpAsObservable(KeyCode.Space)
-				             .TakeUntilDestroy(this)
-				             .FirstOrDefault();
-			}
+			_spatialMesh.SetTrackingTarget(transform);
+
+			_transformer.SetActive(true);
+			_spatialMesh.SetActive(true).Forget(Debug.LogWarning);
+
+			// Transform this prism unitil trigger is pressed
+			await MLUtils.OnTriggerUpAsObservable(KeyCode.Space)
+			             .TakeUntilDestroy(this)
+			             .First();
+
+			_transformer.SetActive(false);
+			_spatialMesh.SetActive(false).Forget(Debug.LogException);
 		}
 
-		void DeletePrism()
+		async UniTask DeletePrism()
 		{
+			// Do the "I'm dying" animation
+			await _visible.SetVisible(false);
+
+			// Destroy this prism
 			Destroy(gameObject);
 		}
 	}

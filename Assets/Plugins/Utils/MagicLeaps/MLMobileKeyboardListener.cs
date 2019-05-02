@@ -2,7 +2,7 @@ using System;
 using UniRx;
 using UnityEngine;
 
-namespace Hashtags
+namespace Utils.MagicLeaps
 {
 	// Receive keyboard events from Mobile App keyboard until Disposed.
 	// Works in Unity Editor with PC keyboard, NOT the phone's keyboard.

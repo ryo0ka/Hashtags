@@ -18,6 +18,7 @@ namespace MLTwitter
 		public string Query { get; set; }
 		public TWSearchResultType ResultType { get; set; }
 		public int Count { get; set; }
+		public long SinceId { get; set; }
 	}
 
 	[Serializable]
@@ -143,25 +144,47 @@ namespace MLTwitter
 		[JsonProperty("user")]
 		public TWUser User { get; private set; }
 
-		[JsonProperty("text")]
+		[JsonProperty("full_text"), JsonConverter(typeof(TWStatusTextConverter))]
 		public string Text { get; private set; }
 
 		[JsonProperty("created_at"), JsonConverter(typeof(TWDateTimeConvereter))]
 		public DateTime DateTime { get; private set; }
 
+		[JsonProperty("entities")]
+		public TWEntities Entities { get; private set; }
+
 		[JsonProperty("extended_entities")]
 		public TWEntities ExtendedEntities { get; private set; }
+
+		[JsonProperty("retweeted_status")]
+		public TWStatus RetweetedStatus { get; private set; }
+
+		[JsonProperty("retweet_count")]
+		public int RetweetCount { get; private set; }
+
+		[JsonProperty("favorite_count")]
+		public int FavoriteCount { get; private set; }
 	}
 
 	[Serializable]
 	public class TWEntities
 	{
 		[JsonProperty("media")]
-		public TWMediaObject[] Media { get; private set; }
+		public TWMedia[] Media { get; private set; }
+
+		[JsonProperty("urls")]
+		public TWUrl[] Urls { get; private set; }
 	}
 
 	[Serializable]
-	public class TWMediaObject
+	public class TWUrl
+	{
+		[JsonProperty("url")]
+		public string Url { get; private set; }
+	}
+
+	[Serializable]
+	public class TWMedia
 	{
 		[JsonProperty("media_url_https")]
 		public string MediaUrl { get; private set; }

@@ -39,5 +39,14 @@ namespace Utils
 			p.z = z ?? p.z;
 			t.localEulerAngles = p;
 		}
+
+		public static void SetLocalScale(this Transform t, float? x = null, float? y = null, float? z = null)
+		{
+			Vector3 p = t.localScale;
+			p.x = x ?? p.x;
+			p.y = y ?? p.y;
+			p.z = z ?? p.z;
+			t.localScale = p;
+		}
 	}
 }

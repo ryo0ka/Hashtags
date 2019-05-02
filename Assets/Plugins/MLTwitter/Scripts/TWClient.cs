@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using UniRx.Async;
@@ -206,7 +207,16 @@ namespace MLTwitter
 				TWHttpException.ThrowIfError(req);
 
 				string res = req.downloadHandler.text;
-				return JsonConvert.DeserializeObject<T>(res);
+
+				//File.WriteAllText(Path.Combine(Application.dataPath, "get.json"), res);
+
+				await UniTask.SwitchToThreadPool(); // avoid hiccup during deserialization
+
+				var obj = JsonConvert.DeserializeObject<T>(res);
+
+				await UniTask.SwitchToMainThread();
+
+				return obj;
 			}
 		}
 

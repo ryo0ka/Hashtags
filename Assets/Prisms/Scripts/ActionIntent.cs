@@ -4,6 +4,6 @@ namespace Prisms
 	{
 		Cancel,
 		Delete,
-		Relocate,
+		Transform,
 	}
 }

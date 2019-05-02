@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.XR.MagicLeap;
-using Utils;
 using UniRx;
 using UniRx.Async;
+using Utils.MagicLeaps;
 
 namespace Hashtags
 {
@@ -21,25 +21,36 @@ namespace Hashtags
 
 		async UniTask DoStart()
 		{
+			MLPrivileges.Start().ThrowIfFail();
+			MLInput.Start().ThrowIfFail();
+
 			// Wait until all privileges are granted
 			await MLUtils.RequestPrivilege(MLPrivilegeId.LocalAreaNetwork);
 
-			var app = Instantiate(_prismTemplate);
-
-			if (_debug)
+			while (this != null)
 			{
-				app.DebugKeyword = "#magicleap";
+				var app = Instantiate(_prismTemplate);
+
+				if (_debug && Application.isEditor)
+				{
+					app.DebugKeyword = "#magic leap";
+				}
+
+				await app.PrismInitialized.First();
+
+				await MLUtils.OnButtonUpAsObservable(MLInputControllerButton.HomeTap).First();
 			}
+		}
 
-			if (!MLInput.IsStarted)
-			{
-				MLInput.Start().ThrowIfFail();
-			}
+		void OnDrawGizmos()
+		{
+			Gizmos.DrawRay(Camera.main.ViewportPointToRay(Vector2.one / 2));
+		}
 
-			MLUtils.OnButtonUpAsObservable(MLInputControllerButton.HomeTap).Subscribe(_ =>
-			{
-				Instantiate(_prismTemplate);
-			});
+		void OnDestroy()
+		{
+			MLPrivileges.Stop();
+			MLInput.Stop();
 		}
 	}
 }
